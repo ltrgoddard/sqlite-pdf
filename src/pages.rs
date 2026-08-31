@@ -121,8 +121,21 @@ impl VTabCursor for PdfPagesCursor<'_> {
         values: &[*mut sqlite3_value],
     ) -> Result<()> {
         let src = api::value_blob(&values[0]);
-        let pdf = self.pdfium.load_pdf_from_byte_slice(src, None).unwrap();
-        //self.pdf_pages = Some(pages);
+        // A table-valued function is opened for any row it is joined against.
+        // The factory joins pdf_pages onto every fetched page (many of which
+        // are HTML) and guards the `%PDF-` magic in SQL, so a non-PDF input is
+        // a valid empty result, not an error. A blob that claims to be a PDF
+        // (`%PDF-`) but fails to load is a real error and must not panic: a
+        // Rust panic aborts the whole sqlite3 process.
+        if src.len() < 5 || &src[0..5] != b"%PDF-" {
+            self.pdf_document = None;
+            self.rowid = 0;
+            return Ok(());
+        }
+        let pdf = self
+            .pdfium
+            .load_pdf_from_byte_slice(src, None)
+            .map_err(|e| Error::new_message(format!("pdf parse error: {}", e)))?;
         self.rowid = 0;
         self.pdf_document = Some(pdf);
 
@@ -135,17 +148,22 @@ impl VTabCursor for PdfPagesCursor<'_> {
     }
 
     fn eof(&self) -> bool {
-        self.rowid >= self.pdf_document.as_ref().unwrap().pages().len()
+        match self.pdf_document.as_ref() {
+            Some(doc) => self.rowid >= doc.pages().len(),
+            // No document (non-PDF input): zero pages.
+            None => true,
+        }
     }
 
     fn column(&self, context: *mut sqlite3_context, i: c_int) -> Result<()> {
-        let page = self
+        let document = self
             .pdf_document
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Error::new_message("pdf: no document"))?;
+        let page = document
             .pages()
             .get(self.rowid)
-            .unwrap();
+            .map_err(|e| Error::new_message(format!("pdf page error: {}", e)))?;
         match column(i) {
             Some(Columns::Width) => {
                 api::result_double(context, page.width().value.into());
@@ -158,17 +176,13 @@ impl VTabCursor for PdfPagesCursor<'_> {
                 None => api::result_null(context),
             },
             Some(Columns::FullText) => {
-                api::result_text(context, page.text().unwrap().all())?;
+                let text = page
+                    .text()
+                    .map_err(|e| Error::new_message(format!("pdf text error: {}", e)))?;
+                api::result_text(context, text.all())?;
             }
             Some(Columns::Page) => {
-                api::result_pointer(
-                    context,
-                    b"wut\0",
-                    (
-                        self.pdf_document.as_ref().unwrap() as *const PdfDocument,
-                        page,
-                    ),
-                );
+                api::result_pointer(context, b"wut\0", (document as *const PdfDocument, page));
             }
             Some(Columns::Pdf) => {
                 api::result_null(context);
