@@ -1,5 +1,8 @@
 name: release
 
+permissions:
+  contents: write
+
 # Build the loadable pdf0 extension (and the matching pdfium runtime) on hosted
 # runners, for macos-aarch64 and linux-x86_64, and publish them as release assets
 # named `sqlite-pdf-<ver>-loadable-<plat>.tar.gz` -- exactly what bricolage's
