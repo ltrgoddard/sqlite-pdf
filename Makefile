@@ -76,6 +76,13 @@ $(TARGET_LOADABLE): $(prefix) $(shell find . -type f -name '*.rs')
 $(TARGET_LOADABLE_RELEASE): $(prefix) $(shell find . -type f -name '*.rs')
 	cargo build --release $(CARGO_TARGET)
 	cp $(BUILT_LOCATION_RELEASE) $@
+ifdef CONFIG_DARWIN
+	@abs=$$(otool -D $@ | tail -1); \
+	if [ "$$abs" != "@rpath/libsqlite_pdf.dylib" ]; then \
+	  install_name_tool -id "@rpath/libsqlite_pdf.dylib" -change "$$abs" "@rpath/libsqlite_pdf.dylib" $@; \
+	  echo "-> install-name => $$(otool -D $@ | tail -1)"; \
+	fi
+endif
 
 python: $(TARGET_WHEELS) $(TARGET_LOADABLE) python/sqlite_pdf/setup.py python/sqlite_pdf/sqlite_pdf/__init__.py .github/workflows/rename-wheels.py
 	cp $(TARGET_LOADABLE) $(INTERMEDIATE_PYPACKAGE_EXTENSION)

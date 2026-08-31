@@ -1,8 +1,4 @@
-use pdfium_render::{
-    document::PdfDocument,
-    page_annotation::{PdfPageAnnotation, PdfPageAnnotationCommon, PdfPageAnnotationType},
-    page_annotations::PdfPageAnnotationsIterator,
-};
+use pdfium_render::prelude::*;
 use sqlite_loadable::prelude::*;
 use sqlite_loadable::{
     api,

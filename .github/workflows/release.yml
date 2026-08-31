@@ -1,0 +1,67 @@
+name: release
+
+# Build the loadable pdf0 extension (and the matching pdfium runtime) on hosted
+# runners, for macos-aarch64 and linux-x86_64, and publish them as release assets
+# named `sqlite-pdf-<ver>-loadable-<plat>.tar.gz` -- exactly what bricolage's
+# `make fetch` downloads. Run on a pushed tag (e.g. v0.0.2-alpha.1) or manually.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  # pin the pdfium build we bind against; must export the symbols pdfium-render uses.
+  PDFIUM_VER: chromium/8035
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14            # arm64
+            plat: macos-aarch64
+            pdfium_asset: pdfium-mac-arm64.tgz
+            ext: dylib
+            libext: dylib
+          - runner: ubuntu-24.04         # x86_64
+            plat: linux-x86_64
+            pdfium_asset: pdfium-linux-x64.tgz
+            ext: so
+            libext: so
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system build deps (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev pkg-config
+
+      - name: Build the loadable extension
+        run: make loadable-release
+
+      - name: Fetch the matching pdfium runtime library
+        run: |
+          curl -fsSL -o /tmp/pdfium.tgz \
+            "https://github.com/bblanchon/pdfium-binaries/releases/download/$PDFIUM_VER/${{ matrix.pdfium_asset }}"
+          tar xzf /tmp/pdfium.tgz -C /tmp
+          # the tgz lays the library under lib/; lift it to the staging root
+          cp /tmp/lib/libpdfium.${{ matrix.libext }} /tmp/libpdfium.${{ matrix.libext }}
+
+      - name: Stage and package the pair
+        run: |
+          mkdir -p staging
+          cp dist/release/pdf0.${{ matrix.ext }} staging/
+          cp /tmp/libpdfium.${{ matrix.libext }} staging/
+          ver="$(cat VERSION)"
+          tar czf "sqlite-pdf-v${ver}-loadable-${{ matrix.plat }}.tar.gz" -C staging \
+            "pdf0.${{ matrix.ext }}" "libpdfium.${{ matrix.libext }}"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "sqlite-pdf-*loadable-*.tar.gz"
+          generate_release_notes: true

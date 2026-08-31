@@ -1,4 +1,4 @@
-use pdfium_render::{document::PdfDocument, pages::PdfPages, pdfium::Pdfium};
+use pdfium_render::prelude::*;
 use sqlite_loadable::{
     api,
     table::{ConstraintOperator, IndexInfo, VTab, VTabArguments, VTabCursor},

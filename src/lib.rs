@@ -3,7 +3,7 @@ mod images;
 mod pages;
 use std::io::{Read, Seek};
 
-use image::ImageOutputFormat;
+use image::ImageFormat;
 use pdfium_render::prelude::*;
 
 use sqlite_loadable::{api, define_scalar_function, Result};
@@ -22,7 +22,7 @@ pub fn pdf_page_thumbnail(
         let mut c = std::io::Cursor::new(Vec::new());
         bitmap
             .as_image()
-            .write_to(&mut c, ImageOutputFormat::Png)
+            .write_to(&mut c, ImageFormat::Png)
             .unwrap();
         let mut buffer = Vec::new();
         c.seek(std::io::SeekFrom::Start(0)).unwrap();

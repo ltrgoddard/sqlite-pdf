@@ -1,10 +1,5 @@
-use image::ImageOutputFormat;
-use pdfium_render::{
-    document::PdfDocument,
-    page_object::{PdfPageObject, PdfPageObjectCommon},
-    page_objects_common::{PdfPageObjectsCommon, PdfPageObjectsIterator},
-    pdfium::Pdfium,
-};
+use image::ImageFormat;
+use pdfium_render::prelude::*;
 use sqlite_loadable::prelude::*;
 use sqlite_loadable::{
     api,
@@ -165,16 +160,16 @@ impl VTabCursor for PdfImagesCursor<'_> {
                 api::result_double(context, img.bounds().unwrap().left.value.into())
             }
             Some(Columns::Y) => api::result_double(context, img.bounds().unwrap().top.value.into()),
-            Some(Columns::Width) => api::result_double(context, img.width().unwrap().value.into()),
+            Some(Columns::Width) => api::result_double(context, img.width().unwrap().into()),
             Some(Columns::Height) => {
-                api::result_double(context, img.height().unwrap().value.into())
+                api::result_double(context, img.height().unwrap().into())
             }
             Some(Columns::Image) => {
                 let i = img
                     .get_processed_image(unsafe { &*self.document.unwrap() })
                     .unwrap();
                 let mut c = std::io::Cursor::new(Vec::new());
-                i.write_to(&mut c, ImageOutputFormat::Png).unwrap();
+                i.write_to(&mut c, ImageFormat::Png).unwrap();
                 let mut buffer = Vec::new();
                 c.seek(std::io::SeekFrom::Start(0)).unwrap();
                 c.read_to_end(&mut buffer).unwrap();
